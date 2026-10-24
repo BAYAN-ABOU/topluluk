@@ -78,6 +78,7 @@ main{padding:18px 20px 70px}
   </div>
   <p class="conn" id="conn"></p>
   <div class="stats" id="stats"></div>
+  <div class="row" style="margin-bottom:6px"><input class="search" id="aiq" placeholder="🤖 بحث ذكي: اكتبي بكلامك، مثلاً: بدي دكتورة نسائية بإسطنبول بالفاتح"><button class="btn" id="aiBtn">بحث ذكي</button></div><p class="conn" id="aiMsg" style="margin:0 0 10px"></p>
   <div class="row">
     <input class="search" id="q" placeholder="ابحث بالاسم أو التخصص أو المنطقة...">
     <select class="sort" id="sort"><option value="rate">الأعلى تقييماً</option><option value="new">الأحدث</option></select>
@@ -113,12 +114,12 @@ main{padding:18px 20px 70px}
 <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
 
 <script>
-   const API_BASE="https://topluluk-1.onrender.com/api";
+const API_BASE="https://topluluk-1.onrender.com/api";
 const SV={"أطباء":["🩺","doctors"],"أساتذة":["📚","teachers"],"ممرضون":["💉","nurses"],"مكاتب عقارية":["🏠","real_estate"],"محامون ومترجمون":["⚖️","legal"],"مطاعم ومحلات":["🍽️","shops"]};
 const ALL="الكل";
 const P=(n,r,s,c,a,l,e,b,rt,rv,v)=>({name:n,role:r,service:s,city:c,area:a,lang:l,experience:e,bio:b,rating:rt,reviews:rv,verified:v,phone:""});
 // بيانات تجريبية وهمية
-let DATA=[
+const DEMO=[
 P("د. سامر الحلبي","طبيب أطفال","أطباء","إسطنبول","الفاتح","عربي، تركي","12 سنة خبرة","استشاري أطفال يستقبل حالات حديثي الولادة والأطفال حتى 14 سنة.",4.8,36,true),
 P("د. لينا مارديني","طبيبة نسائية وتوليد","أطباء","إسطنبول","إسنيورت","عربي، تركي، إنجليزي","15 سنة خبرة","متابعة حمل وولادة وفحوصات دورية.",4.9,52,true),
 P("د. عمر النجار","طبيب أسنان","أطباء","غازي عنتاب","الشهيد كامل","عربي، تركي","10 سنوات خبرة","علاج جذور وتقويم وزراعة أسنان.",4.6,28,true),
@@ -136,11 +137,11 @@ P("مكتب الأمانة للترجمة","ترجمة محلفة","محامون
 P("مطعم ياسمين الشام","مطعم مأكولات شامية","مطاعم ومحلات","إسطنبول","أكسراي","مأكولات شامية","توصيل متوفر","مشاوي وأطباق شامية وحلويات.",4.4,120,false),
 P("سوبرماركت الأصالة","مواد غذائية عربية","مطاعم ومحلات","أنقرة","ألتيندغ","منتجات عربية","توصيل متوفر","بقالة ومنتجات عربية مستوردة.",4.1,37,false)
 ].map((p,i)=>({...p,id:"m"+i,ts:i}));
+let DATA=[],loading=true;
 
 const load=k=>{try{return JSON.parse(localStorage.getItem(k)||"[]")}catch(e){return[]}};
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-DATA.push(...load("cd_profiles"));
 let favs=new Set(load("cd_favs"));
 let st={svc:ALL,city:ALL,area:ALL,q:"",sort:"rate",fav:false},usingBackend=false;
 const $=id=>document.getElementById(id);
@@ -160,6 +161,7 @@ function render(){
   let r=DATA.filter(p=>(st.svc===ALL||p.service===st.svc)&&(st.city===ALL||p.city===st.city)&&(st.area===ALL||p.area===st.area)&&(!st.fav||favs.has(key(p)))&&(!q||[p.name,p.role,p.area,p.city].some(x=>x.includes(q))));
   r.sort((a,b)=>st.sort==="rate"?(b.rating||0)-(a.rating||0)||b.reviews-a.reviews:b.ts-a.ts);
   $("count").textContent=r.length+" نتيجة";
+  $("empty").innerHTML=loading?"<h3>⏳ جاري تحميل البيانات...</h3><p>السيرفر المجاني ممكن ياخد حتى دقيقة ليصحى</p>":"<h3>لا توجد نتائج</h3><p>جرّب تغيير الفلاتر</p>";
   $("empty").style.display=r.length?"none":"block";
   const g=$("grid");g.innerHTML="";
   r.forEach(p=>{const c=document.createElement("div");c.className="card";c.tabIndex=0;
@@ -202,11 +204,32 @@ $("reg").onsubmit=async e=>{e.preventDefault();
 
 // اتصال اختياري بالـ backend
 async function tryBackend(){
-  try{const r=await fetch(API_BASE+"/profiles",{signal:AbortSignal.timeout(2500)});if(!r.ok)throw 0;const j=await r.json();
+  $("conn").textContent="⏳ جاري الاتصال بالسيرفر... (أول مرة ممكن ياخد دقيقة)";
+  try{const r=await fetch(API_BASE+"/profiles",{signal:AbortSignal.timeout(75000)});if(!r.ok)throw 0;const j=await r.json();
     DATA=j.results.map((x,i)=>{const d=x.details||{};return{id:x.id,ts:-i,name:x.full_name,role:x.headline,service:x.service,city:x.city,area:x.area,lang:x.languages||"—",experience:d.years_experience?d.years_experience+" سنة خبرة":(d.deal_type||"—"),bio:x.bio||"",phone:x.phone||"",rating:0,reviews:0,verified:x.verification_status==="verified"}});
     usingBackend=true;$("conn").textContent="🟢 متصل بالسيرفر — بيانات حقيقية ومشتركة"}
-  catch(_){usingBackend=false;$("conn").textContent="⚪ وضع تجريبي محلي — بيانات وهمية، وما في سيرفر متصل"}
-  render()}
+  catch(_){usingBackend=false;DATA=[...load("cd_profiles"),...DEMO];$("conn").textContent="⚪ وضع تجريبي محلي — بيانات وهمية، وما في سيرفر متصل"}
+  loading=false;render()}
+// البحث الذكي
+$("aiBtn").onclick=async()=>{
+  const t=$("aiq").value.trim(),m=$("aiMsg");
+  if(!t){m.textContent="اكتبي جملة للبحث أول.";return}
+  if(!usingBackend){m.textContent="البحث الذكي بيحتاج اتصال بالسيرفر. استني لحد ما يظهر 🟢 متصل.";return}
+  m.textContent="⏳ عم أفهم طلبك...";$("aiBtn").disabled=true;
+  try{
+    const r=await fetch(API_BASE+"/smart-search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t}),signal:AbortSignal.timeout(30000)});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||"صار خطأ");
+    st={...st,svc:d.service||ALL,city:d.city||ALL,area:d.area||ALL,q:d.keyword||"",fav:false};
+    $("q").value=st.q;
+    const parts=[d.service,d.city,d.area,d.keyword].filter(Boolean);
+    m.textContent=parts.length?"فهمت: "+parts.join(" • "):"ما قدرت أحدد فلاتر، جرّبي توضحي أكتر.";
+    render();
+  }catch(e){m.textContent="⚠️ "+(e.message||"صار خطأ")+" — جرّبي مرة تانية."}
+  $("aiBtn").disabled=false;
+};
+$("aiq").addEventListener("keydown",e=>{if(e.key==="Enter")$("aiBtn").click()});
+
 render();tryBackend();
 </script>
 </body>
